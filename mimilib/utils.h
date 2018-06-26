@@ -23,7 +23,7 @@
 #endif
 
 #define MIMIKATZ_A				"mimikatz"
-#define MIMIKATZ_VERSION_A		"2.0 alpha"
+#define MIMIKATZ_VERSION_A		"2.1 alpha"
 #define MIMIKATZ_CODENAME_A		"A La Vie, A L\'Amour"
 #define MIMIKATZ_FULL_A			MIMIKATZ_A " " MIMIKATZ_VERSION_A " (" MIMIKATZ_ARCH_A ") built on " __DATE__ " " __TIME__
 #define MIMIKATZ_SECOND_A		"\"" MIMIKATZ_CODENAME_A "\""
@@ -36,6 +36,7 @@
 
 void klog(FILE * logfile, PCWCHAR format, ...);
 void klog_password(FILE * logfile, PUNICODE_STRING pPassword);
+void klog_sid(FILE * logfile, PSID pSid);
 
 typedef struct _REMOTE_LIB_FUNC {
 	DWORD	outputSize;
